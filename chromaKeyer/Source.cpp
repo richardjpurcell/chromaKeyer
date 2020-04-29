@@ -15,21 +15,8 @@ using namespace std;
 Mat frame, frameHSV, frameSpillSuppress, background, mask1, blurMask1, out;
 Vec3b chromaColorLOW(180, 255, 255), chromaColorHIGH(0, 0, 0);
 int width, height, blurMaskVal, adjustSpillVal;
-
-//Points to store the two corners of the color selection rectangle
 Point p1, p2;
-
 bool mousePressed;
-
-void selectChroma(int action, int x, int y, int flags, void* userdata);
-void thresholdHUE(int, void*);
-void thresholdSAT(int, void*);
-void thresholdVAL(int, void*);
-void softenMask(int, void*);
-void maskOperations();
-void adjustSpillSuppression(int, void*);
-void spillSuppression();
-
 string windowName = "Frame";
 int trackBarCount = 5;
 int hueThreshold = 1;
@@ -44,10 +31,32 @@ int maxSoften = 20;
 int spillVal = 0;
 int maxSpillVal = 100;
 
+void selectChroma(int action, int x, int y, int flags, void* userdata);
+void thresholdHUE(int, void*);
+void thresholdSAT(int, void*);
+void thresholdVAL(int, void*);
+void softenMask(int, void*);
+void maskOperations();
+void adjustSpillSuppression(int, void*);
+void spillSuppression();
+void videoOut(String in, String out);
 
-int main() {
+int main(int argc, char** argv) {
 	
-	string filename = "./greenscreen-demo.mp4";
+	string filename;
+
+	if (argc != 2)
+	{
+		cout << "Usage:chromaKeyer.exe video_path" << endl;
+		cout << "ie:chromaKeyer ./greenscreen-asteroid.mp4" << endl;
+		cout << "Loading default video..." << endl;
+
+		filename = "./greenscreen-demo.mp4";
+	}
+	else
+	{
+		filename = argv[1];
+	}
 
 	VideoCapture cap(filename);
 
@@ -65,13 +74,8 @@ int main() {
 	blurMaskVal = 1;
 	adjustSpillVal = 0;
 	
-
-
 	namedWindow("Frame", WINDOW_NORMAL);
-	namedWindow("Mask", WINDOW_NORMAL);
 	resizeWindow("Frame", width, height + trackBarCount * 60);
-	resizeWindow("Mask", width, height);
-
 
 	createTrackbar("hue", windowName, &hueThreshold, maxThreshold, thresholdHUE);
 	createTrackbar("sat", windowName, &satThreshold, maxThreshold, thresholdSAT);
@@ -85,6 +89,7 @@ int main() {
 
 	cout << "press > to step forward" << endl;
 	cout << "press r to reset mask" << endl;
+	cout << "press o to output sample video, any key to terminate video write" << endl;
 	cout << "press esc to exit" << endl;
 
 	cvtColor(frame, frameHSV, COLOR_BGR2HSV);
@@ -114,8 +119,15 @@ int main() {
 			frameSpillSuppress = frameHSV.clone();
 			blurMask1 = mask1.clone();
 		}
-		if (c == '>')
+		if (c == '>') {
 			cap >> frame;
+			cvtColor(frame, frameHSV, COLOR_BGR2HSV);
+			frameSpillSuppress = frameHSV.clone();
+		}
+		if (c == 'o') {
+			string videoOUT = "./sampleVideo.avi";
+			videoOut(filename, videoOUT);
+		}
 		if (c == 27)
 			break;
 	}
@@ -281,4 +293,42 @@ void spillSuppression() {
 		}
 	}
 	cvtColor(frameSpillSuppress, out, COLOR_HSV2BGR);
+}
+
+void videoOut(String inVid, String outVid) {
+	Mat videoFrame;
+	VideoWriter writer;
+	VideoCapture cap(inVid);
+	int vidWidth = cap.get(CAP_PROP_FRAME_WIDTH);
+	int vidHeight = cap.get(CAP_PROP_FRAME_HEIGHT);
+	double fps = cap.get(CAP_PROP_FPS);
+	int codec = VideoWriter::fourcc('M', 'J', 'P', 'G');
+	string filenameOUT = "./chromakeySample.avi";
+	Size vidSize = Size(vidWidth, vidHeight);
+	writer.open(outVid, codec, fps, vidSize);
+	namedWindow("Video Writer", WINDOW_NORMAL);
+	resizeWindow("Video Writer", vidWidth/2, vidHeight/2);
+	cout << "Writing sample video" << endl;
+
+	for (;;) {
+		cap >> videoFrame;
+		if (videoFrame.empty())
+			break;
+		cvtColor(videoFrame, frameHSV, COLOR_BGR2HSV);
+		inRange(frameHSV, chromaColorLOW, chromaColorHIGH, mask1);
+		frameSpillSuppress = frameHSV.clone();
+		spillSuppression();
+		maskOperations();
+		writer.write(out);
+		imshow("Video Writer", out);
+		if (waitKey(5) >= 0) {
+			destroyWindow("Video Writer");
+			break;
+		}
+	}
+	if (getWindowProperty("Video Writer", 0) != -1)
+		destroyWindow("Video Writer");
+	writer.release();
+	cap.release();
+	cout << "Done writing sample video" << endl;
 }
