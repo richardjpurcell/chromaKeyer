@@ -1,5 +1,11 @@
 /*
- *some info
+ * The chromaKeyer keys out a color range based on a user's image patch selection.
+ * The color range can be expanded or shrunk using hue, saturation, and value sliders.
+ * The created mask can be softened.  
+ * Spill matching the hue of the color range can also be reduced.
+ * To simplify the program the background image is currently only a solid color.  This can
+ * be expanded to images in future versions.
+ * Author: Richard Purcell, April 30 2020.
  */
 
 #include <opencv2/opencv.hpp>
@@ -137,6 +143,10 @@ int main(int argc, char** argv) {
 	return 0;
 }
 
+/*
+* The selectChroma is a mouse callback function that draws a rectangle based on
+* user mouse input.  A patch is selected that sets the low and high key values.
+*/
 void selectChroma(int action, int x, int y, int flags, void* userdata) {
 	Mat temp = frame.clone();
 	if (x < 0)
@@ -189,12 +199,15 @@ void selectChroma(int action, int x, int y, int flags, void* userdata) {
 				else if (splitHSV[2].at<uchar>(i, j) > chromaColorHIGH[2])
 					chromaColorHIGH[2] = splitHSV[2].at<uchar>(i, j);
 			}
-		}
-		
+		}		
 	}
 	frame = temp.clone();
 }
 
+/*
+* The thresholdHUE function is a trackbar callback function that expands or contracts
+* the selected hue of the chromaKey range.
+*/
 void thresholdHUE(int, void*) {
 	if (hueThreshold > hueThresholdPrev) {
 		if (chromaColorLOW[0] - hueThreshold > 0)
@@ -216,6 +229,10 @@ void thresholdHUE(int, void*) {
 	hueThresholdPrev = hueThreshold;
 }
 
+/*
+* The thresholdSAT function is a trackbar callback function that expands or contracts
+* the selected saturation of the chromaKey range.
+*/
 void thresholdSAT(int, void*) {
 	if (satThreshold > satThresholdPrev) {
 		if (chromaColorLOW[1] - satThreshold > 0)
@@ -237,6 +254,10 @@ void thresholdSAT(int, void*) {
 	satThresholdPrev = satThreshold;
 }
 
+/*
+* The thresholdVAL function is a trackbar callback function that expands or contracts
+* the selected value of the chromaKey range.
+*/
 void thresholdVAL(int, void*) {
 	if (valThreshold > valThresholdPrev) {
 		if (chromaColorLOW[2] - valThreshold > 0)
@@ -262,6 +283,10 @@ void softenMask(int, void*) {
 		blurMaskVal = soften*2 + 1;
 }
 
+/*
+* The maskOperations function blurs the key mask and merges the background and foreground
+* based on the blurred mask.
+*/
 void maskOperations() {
 	GaussianBlur(mask1, blurMask1, Size(blurMaskVal, blurMaskVal), 0, 0);
 	//adapted from https://stackoverflow.com/questions/36216702/combining-2-images-with-transparent-mask-in-opencv
@@ -277,10 +302,18 @@ void maskOperations() {
 	}
 }
 
+/*
+* The adjustSpillSuppression function is a trackbar callback function that expands or contracts
+* the spill suppression value.
+*/
 void adjustSpillSuppression(int, void*) {
 	adjustSpillVal = spillVal;
 }
 
+/*
+* The spillSuppression function uses the adjustSpillVal to desaturate the chromaKey hue if it 
+* is found in the foreground image.
+*/
 void spillSuppression() {
 	
 	for (int y = 0; y < frame.rows; ++y) {
@@ -295,6 +328,10 @@ void spillSuppression() {
 	cvtColor(frameSpillSuppress, out, COLOR_HSV2BGR);
 }
 
+/*
+* The videoOut function handles exporting the chromakeyed footage.
+* The compression needs to be fixed in this function.
+*/
 void videoOut(String inVid, String outVid) {
 	Mat videoFrame;
 	VideoWriter writer;
